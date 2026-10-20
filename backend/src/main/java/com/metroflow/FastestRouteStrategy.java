@@ -69,9 +69,27 @@ public class FastestRouteStrategy implements RouteStrategy{
 
         Collections.reverse(path);
 
-        return new RouteResult(
-                path,
-                distances.get(destination)
+        List<RouteStationDetail> stationDetails = new ArrayList<>();
+
+for (String stationId : path) {
+    Station station = network.getStation(stationId);
+
+    if (station != null) {
+        stationDetails.add(
+                new RouteStationDetail(
+                        station.getId(),
+                        station.getName(),
+                        station.getOccupancyPercentage(),
+                        station.getCrowdLevel()
+                )
         );
+    }
+}
+
+return new RouteResult(
+        path,
+        distances.get(destination),
+        stationDetails
+);
     }
 }

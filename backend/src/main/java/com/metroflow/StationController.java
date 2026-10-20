@@ -18,15 +18,29 @@ import java.util.LinkedHashMap;
 @CrossOrigin(origins = "http://localhost:5173")
 public class StationController {
 
-    @GetMapping("/api/stations")
-    public List<Map<String, String>> getStations() {
-        return List.of(
-                Map.of("id", "S01", "name", "Central"),
-                Map.of("id", "S02", "name", "Museum"),
-                Map.of("id", "S03", "name", "University"),
-                Map.of("id", "S04", "name", "City Hospital"),
-                Map.of("id", "S05", "name", "Airport"));
+    
+@GetMapping("/api/stations")
+public List<Map<String, Object>> getStations() {
+
+    MetroNetwork network = MetroNetworkFactory.createSampleNetwork();
+
+    List<Map<String, Object>> result = new java.util.ArrayList<>();
+
+    for (Station station : network.getStations()) {
+        Map<String, Object> stationData = new LinkedHashMap<>();
+
+        stationData.put("id", station.getId());
+        stationData.put("name", station.getName());
+        stationData.put("occupancyPercentage",
+                station.getOccupancyPercentage());
+        stationData.put("crowdLevel", station.getCrowdLevel());
+
+        result.add(stationData);
     }
+
+    return result;
+}
+
 
     @GetMapping("/api/network")
     public Map<String, List<Connection>> getNetwork() {

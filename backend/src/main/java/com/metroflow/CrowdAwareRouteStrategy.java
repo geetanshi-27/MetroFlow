@@ -10,13 +10,12 @@ public class CrowdAwareRouteStrategy implements RouteStrategy {
             String source,
             String destination) {
 
-               Map<String, Integer> costs = new HashMap<>();
+        Map<String, Integer> costs = new HashMap<>();
         Map<String, Integer> travelTimes = new HashMap<>();
         Map<String, String> previous = new HashMap<>();
 
         PriorityQueue<String> queue = new PriorityQueue<>(
-                Comparator.comparingInt(costs::get)
-        );
+                Comparator.comparingInt(costs::get));
 
         for (String stationId : network.getStationIds()) {
             costs.put(stationId, Integer.MAX_VALUE);
@@ -32,7 +31,7 @@ public class CrowdAwareRouteStrategy implements RouteStrategy {
         travelTimes.put(source, 0);
         queue.add(source);
 
-                while (!queue.isEmpty()) {
+        while (!queue.isEmpty()) {
             String current = queue.poll();
 
             if (current.equals(destination)) {
@@ -43,22 +42,29 @@ public class CrowdAwareRouteStrategy implements RouteStrategy {
                 continue;
             }
 
-            for (Connection connection :
-                    network.getConnections(current)) {
+            for (Connection connection : network.getConnections(current)) {
 
                 String neighbor = connection.getToStationId();
 
-                int crowdPenalty;
+                Station neighborStation = network.getStation(neighbor);
 
-                switch (connection.getCrowdLevel()) {
-                    case 1:
-                        crowdPenalty = 0;
-                        break;
-                    case 2:
-                        crowdPenalty = 2;
-                        break;
-                    default:
-                        crowdPenalty = 5;
+                int crowdPenalty = 0;
+
+                if (neighborStation != null) {
+                    switch (neighborStation.getCrowdLevel()) {
+                        case LOW:
+                            crowdPenalty = 0;
+                            break;
+                        case MODERATE:
+                            crowdPenalty = 2;
+                            break;
+                        case HIGH:
+                            crowdPenalty = 5;
+                            break;
+                        case CRITICAL:
+                            crowdPenalty = 8;
+                            break;
+                    }
                 }
 
                 int newCost = costs.get(current)
@@ -91,11 +97,31 @@ public class CrowdAwareRouteStrategy implements RouteStrategy {
             current = previous.get(current);
         }
 
-        Collections.reverse(path);
+        
+Collections.reverse(path);
 
-        return new RouteResult(
-                path,
-                travelTimes.get(destination)
+List<RouteStationDetail> stationDetails = new ArrayList<>();
+
+for (String stationId : path) {
+    Station station = network.getStation(stationId);
+
+    if (station != null) {
+        stationDetails.add(
+                new RouteStationDetail(
+                        station.getId(),
+                        station.getName(),
+                        station.getOccupancyPercentage(),
+                        station.getCrowdLevel()
+                )
         );
+    }
+}
+
+return new RouteResult(
+        path,
+        travelTimes.get(destination),
+        stationDetails
+);
+
     }
 }
