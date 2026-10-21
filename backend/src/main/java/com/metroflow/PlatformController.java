@@ -44,11 +44,12 @@ public class PlatformController {
     }
 
     
-@PostMapping("/{platformId}/departure")
-public String simulateDeparture(
+@PostMapping("/{stationId}/{platformId}/departure")public String simulateDeparture(
+    @PathVariable String stationId,
+
         @PathVariable String platformId) {
 
-    int departed = platformService.simulateDeparture(platformId, 10);
+    int departed = platformService.simulateDeparture(stationId,platformId, 10);
 
     if (departed > 0) {
         return "Departure simulated for Platform " + platformId

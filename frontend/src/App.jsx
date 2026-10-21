@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from "react";
+import MetroMap from "./MetroMap";
 
 export default function App() {
   const [stations, setStations] = useState([]);
@@ -20,6 +21,9 @@ export default function App() {
   const [passengerStatus, setPassengerStatus] = useState(null);
   const [departureLoading, setDepartureLoading] = useState(false);
   const [departureMessage, setDepartureMessage] = useState("");
+  const [admissionStationId, setAdmissionStationId] = useState("");
+  const [fastestRoute, setFastestRoute] = useState(null);
+  const [crowdAwareRoute, setCrowdAwareRoute] = useState(null);
 
   useEffect(() => {
     fetch("http://localhost:8080/api/stations")
@@ -37,15 +41,21 @@ export default function App() {
       });
   }, []);
 
+
   async function findRoute() {
     setLoading(true);
     setError("");
     setRoute(null);
+    setFastestRoute(null);
+    setCrowdAwareRoute(null);
     setFareQuote(null);
     setFareError("");
     setFareLoading(true);
+    setAdmission(null);
+    setPassengerStatus(null);
+    setDepartureMessage("");
 
-    try {
+    const requestRoute = async (routeStrategy) => {
       const response = await fetch("http://localhost:8080/api/routes", {
         method: "POST",
         headers: {
@@ -54,35 +64,49 @@ export default function App() {
         body: JSON.stringify({
           sourceId: source,
           destinationId: destination,
-          strategy: strategy,
+          strategy: routeStrategy,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Could not find a route.");
+        throw new Error("Could not calculate both routes.");
       }
 
-      const data = await response.json();
-      setRoute(data);
+      return response.json();
+    };
 
-      // Fetch the fare quote for the same journey.
-      const fareResponse = await fetch(
-        "http://localhost:8080/api/fares",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sourceId: source,
-            destinationId: destination,
-            strategy: strategy,
-          }),
-        }
-      );
+    try {
+      // Calculate both strategies in parallel.
+      const [fastestData, crowdData] = await Promise.all([
+        requestRoute("FASTEST"),
+        requestRoute("crowd-aware"),
+      ]);
+
+      setFastestRoute(fastestData);
+      setCrowdAwareRoute(crowdData);
+
+      // Preserve the currently selected strategy.
+      const selectedRoute =
+        strategy === "FASTEST" ? fastestData : crowdData;
+
+      setRoute(selectedRoute);
+
+      // Calculate the fare for the selected strategy.
+      const fareResponse = await fetch("http://localhost:8080/api/fares", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceId: source,
+          destinationId: destination,
+          strategy,
+        }),
+      });
 
       if (!fareResponse.ok) {
-setFareError("Route found, but fare calculation failed.");      }
+        throw new Error("Routes found, but fare calculation failed.");
+      }
 
       const fareData = await fareResponse.json();
       setFareQuote(fareData);
@@ -95,12 +119,63 @@ setFareError("Route found, but fare calculation failed.");      }
   }
 
 
+  async function selectStrategy(nextStrategy) {
+    setStrategy(nextStrategy);
+
+    const selectedRoute =
+      nextStrategy === "FASTEST" ? fastestRoute : crowdAwareRoute;
+
+    if (!selectedRoute) return;
+
+    setRoute(selectedRoute);
+    setFareQuote(null);
+    setFareError("");
+    setFareLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8080/api/fares", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceId: source,
+          destinationId: destination,
+          strategy: nextStrategy,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Could not calculate the fare.");
+      }
+
+      const data = await response.json();
+      setFareQuote(data);
+    } catch (err) {
+      setFareError(err.message || "Fare calculation failed.");
+    } finally {
+      setFareLoading(false);
+    }
+  }
+
+
+
   async function requestAdmission() {
     if (!passengerId || !destination) return;
+
+    if (!route || route.stationIds.length < 2) {
+      setError("Find a route before requesting platform admission.");
+      return;
+    }
 
     setAdmissionLoading(true);
     setAdmission(null);
     setError("");
+    setDepartureMessage("");
+
+    // The platform should serve the FIRST leg of the journey,
+    // not necessarily the final destination.
+    const nextStationId = route.stationIds[1];
 
     try {
       const response = await fetch(
@@ -113,7 +188,7 @@ setFareError("Route found, but fare calculation failed.");      }
           body: JSON.stringify({
             stationId: source,
             passengerId,
-            destinationStationId: destination,
+            destinationStationId: nextStationId,
           }),
         }
       );
@@ -124,6 +199,8 @@ setFareError("Route found, but fare calculation failed.");      }
 
       const data = await response.json();
       setAdmission(data);
+      setAdmissionStationId(source);
+
       setPassengerStatus({
         passengerId,
         status: data.status,
@@ -140,6 +217,7 @@ setFareError("Route found, but fare calculation failed.");      }
   }
 
 
+
   async function simulateDeparture() {
     if (!admission?.platformId) return;
 
@@ -148,7 +226,7 @@ setFareError("Route found, but fare calculation failed.");      }
 
     try {
       const response = await fetch(
-        `http://localhost:8080/api/platforms/${admission.platformId}/departure`,
+        `http://localhost:8080/api/platforms/${admissionStationId}/${admission.platformId}/departure`,
         { method: "POST" }
       );
 
@@ -243,7 +321,7 @@ setFareError("Route found, but fare calculation failed.");      }
 
 
   return (
-    <div className="min-h-screen bg-white-950 text-slate-100">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>
@@ -370,84 +448,123 @@ setFareError("Route found, but fare calculation failed.");      }
             )}
 
 
-            {route && (
-              <div className="mt-6 rounded-xl border border-teal-800 bg-slate-950 p-5">
-                <h4 className="font-semibold text-teal-300">
-                  Your route
-                </h4>
 
-                <p className="mt-3 text-2xl font-bold">
-                  {route.totalTravelTimeMinutes} minutes
-                </p>
+            {(fastestRoute || crowdAwareRoute) && (
+              <div className="mt-6 space-y-4">
+                <h3 className="text-lg font-semibold">Compare your routes</h3>
 
-                <p className="mt-1 text-sm text-slate-400">
-                  Estimated travel time
-                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    {
+                      key: "FASTEST",
+                      title: "⚡ Fastest route",
+                      data: fastestRoute,
+                    },
+                    {
+                      key: "crowd-aware",
+                      title: "◎ Crowd-aware route",
+                      data: crowdAwareRoute,
+                    },
+                  ].map(({ key, title, data }) => (
+                    <div
+                      key={key}
+                      className={`rounded-xl border p-4 ${strategy === key
+                          ? "border-teal-400 bg-teal-950/40"
+                          : "border-slate-700 bg-slate-950"
+                        }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-semibold">{title}</h4>
 
-                <ol className="mt-4 space-y-2">
-                  {route.stationIds.map((stationId, index) => {
-                    const station = stations.find(
-                      (item) => item.id === stationId
-                    );
-
-                    return (
-                      <li key={stationId} className="flex items-center gap-3">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-950 text-xs text-teal-300">
-                          {index + 1}
-                        </span>
-
-                        <span>
-                          {station ? station.name : stationId}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-
-
-                {fareLoading && (
-                  <p className="mt-5 text-sm text-slate-400">
-                    Calculating ticket fares...
-                  </p>
-                )}
-
-                {fareError && (
-                  <p className="mt-5 text-sm text-rose-400">
-                    {fareError}
-                  </p>
-                )}
-
-                {fareQuote && (
-                  <div className="mt-6 border-t border-slate-800 pt-5">
-                    <h4 className="text-lg font-semibold text-teal-300">
-                      Ticket fares
-                    </h4>
-
-                    <p className="mt-1 text-sm text-slate-400">
-                      {fareQuote.numberOfStops} connections · Base fare ₹{fareQuote.baseFare}
-                    </p>
-
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-xl bg-slate-900 p-4">
-                        <p className="text-sm text-slate-400">Adult</p>
-                        <p className="mt-2 text-2xl font-bold">₹{fareQuote.adultFare}</p>
+                        {strategy === key && (
+                          <span className="rounded-full bg-teal-900 px-2 py-1 text-xs text-teal-300">
+                            Selected
+                          </span>
+                        )}
                       </div>
 
-                      <div className="rounded-xl bg-slate-900 p-4">
-                        <p className="text-sm text-slate-400">Child</p>
-                        <p className="mt-2 text-2xl font-bold">₹{fareQuote.childFare}</p>
-                      </div>
+                      {data && (
+                        <>
+                          <p className="mt-4 text-2xl font-bold">
+                            {data.totalTravelTimeMinutes} min
+                          </p>
 
-                      <div className="rounded-xl bg-slate-900 p-4">
-                        <p className="text-sm text-slate-400">Senior</p>
-                        <p className="mt-2 text-2xl font-bold">₹{fareQuote.seniorFare}</p>
-                      </div>
+                          <p className="mt-1 text-sm text-slate-400">
+                            {Math.max(0, data.stationIds.length - 1)} connections
+                          </p>
+
+                          <ol className="mt-4 space-y-2">
+                            {data.stationIds.map((stationId, index) => {
+                              const station = stations.find(
+                                (item) => item.id === stationId
+                              );
+
+                              return (
+                                <li
+                                  key={`${key}-${stationId}`}
+                                  className="flex items-center gap-2 text-sm"
+                                >
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs text-teal-300">
+                                    {index + 1}
+                                  </span>
+                                  {station ? station.name : stationId}
+                                </li>
+                              );
+                            })}
+                          </ol>
+
+                          <button
+                            onClick={() => selectStrategy(key)}
+                            disabled={strategy === key}
+                            className="mt-5 w-full rounded-lg border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-300 hover:bg-teal-950 disabled:cursor-default disabled:opacity-60"
+                          >
+                            {strategy === key ? "Currently selected" : "Choose this route"}
+                          </button>
+                        </>
+                      )}
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
 
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <h4 className="font-semibold text-teal-300">
+                    Ticket fares · {strategy === "FASTEST" ? "Fastest route" : "Crowd-aware route"}
+                  </h4>
+
+                  {fareLoading && (
+                    <p className="mt-3 text-sm text-slate-400">
+                      Calculating ticket fares...
+                    </p>
+                  )}
+
+                  {fareError && (
+                    <p className="mt-3 text-sm text-rose-400">{fareError}</p>
+                  )}
+
+                  {fareQuote && !fareLoading && (
+                    <>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {fareQuote.numberOfStops} connections · Base fare ₹{fareQuote.baseFare}
+                      </p>
+
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        {[
+                          ["Adult", fareQuote.adultFare],
+                          ["Child", fareQuote.childFare],
+                          ["Senior", fareQuote.seniorFare],
+                        ].map(([label, fare]) => (
+                          <div key={label} className="rounded-lg bg-slate-900 p-3">
+                            <p className="text-sm text-slate-400">{label}</p>
+                            <p className="mt-1 text-xl font-bold">₹{fare}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
+
 
 
             <div className="mt-6 border-t border-slate-800 pt-6">
@@ -530,6 +647,11 @@ setFareError("Route found, but fare calculation failed.");      }
                 <p className="mt-2 text-3xl font-bold">02</p>
               </div>
             </div>
+
+            <div className="mt-6">
+  <h4 className="mb-3 font-semibold">Metro network map</h4>
+  <MetroMap />
+</div>
 
 
             <h4 className="mt-6 font-medium">Platform status</h4>

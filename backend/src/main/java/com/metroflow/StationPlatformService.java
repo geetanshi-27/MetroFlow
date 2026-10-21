@@ -123,95 +123,113 @@ public class StationPlatformService {
     }
 
     
-public int simulateDeparture(String platformId, int trainCapacity) {
-    for (StationPlatformManager manager : stationManagers.values()) {
-        for (Platform platform : manager.getPlatforms()) {
 
-            if (!platform.getPlatformId().equals(platformId)) {
-                continue;
-            }
+public int simulateDeparture(
+        String stationId,
+        String platformId,
+        int trainCapacity) {
 
-            // Remember who was on the platform before departure.
-            List<Passenger> beforeDeparture =
-                    new ArrayList<>(platform.getPassengers());
+    // First select the correct station.
+    StationPlatformManager manager = stationManagers.get(stationId);
 
-            int departed = manager.departTrainFromPlatform(
-                    platformId, trainCapacity);
-
-            // Identify passengers removed by the departing train.
-            if (departed > 0) {
-                for (Passenger passenger : beforeDeparture) {
-                    if (!platform.hasPassenger(
-                            passenger.getPassengerId())) {
-                        departedPassengerIds.add(
-                                passenger.getPassengerId());
-                    }
-                }
-            }
-
-            return departed;
-        }
+    if (manager == null) {
+        return -1;
     }
 
+    // Then find the platform within that station.
+    for (Platform platform : manager.getPlatforms()) {
+
+        if (!platform.getPlatformId().equals(platformId)) {
+            continue;
+        }
+
+        // Remember who was on the platform before departure.
+        List<Passenger> beforeDeparture =
+                new ArrayList<>(platform.getPassengers());
+
+        int departed = manager.departTrainFromPlatform(
+                platformId, trainCapacity);
+
+        // Track passengers who actually left on the train.
+        if (departed > 0) {
+            for (Passenger passenger : beforeDeparture) {
+                if (!platform.hasPassenger(
+                        passenger.getPassengerId())) {
+                    departedPassengerIds.add(
+                            passenger.getPassengerId());
+                }
+            }
+        }
+
+        return departed;
+    }
+
+    // This station exists, but the platform does not.
     return -1;
 }
 
 
 
+
     
     
-    @Scheduled(
+   
+@Scheduled(
     initialDelay = 60000,
     fixedRate = 45000
 )
-    public void simulateAutomaticDepartures() {
+public void simulateAutomaticDepartures() {
 
-        // Collect platforms in a consistent order.
-        List<Platform> platforms = new ArrayList<>();
+    // Keep each platform paired with its station ID.
+    List<Platform> platforms = new ArrayList<>();
+    List<String> stationIds = new ArrayList<>();
 
-        for (StationPlatformManager manager : stationManagers.values()) {
-            platforms.addAll(manager.getPlatforms());
+    for (StationPlatformManager manager : stationManagers.values()) {
+        for (Platform platform : manager.getPlatforms()) {
+            platforms.add(platform);
+            stationIds.add(manager.getStationId());
         }
-
-        if (platforms.isEmpty()) {
-            return;
-        }
-
-        // Search from the next platform in the rotation.
-        for (int checked = 0; checked < platforms.size(); checked++) {
-
-            int index = (nextPlatformIndex + checked)
-                    % platforms.size();
-
-            Platform platform = platforms.get(index);
-
-            // Depart from the first occupied platform we find.
-            if (platform.getCurrentPassengers() > 0) {
-
-                // Next run starts after this platform.
-                nextPlatformIndex = (index + 1) % platforms.size();
-
-                int departed = simulateDeparture(
-                    platform.getPlatformId(), 10
-                );
-
-                if (departed > 0) {
-                    System.out.println(
-                        "Automatic train departed from "
-                        + platform.getPlatformId()
-                        + " carrying " + departed + " passengers."
-                    );
-                }
-
-                return;
-            }
-        }
-
-        System.out.println(
-            "No passengers available for automatic departure."
-        );
     }
 
+    if (platforms.isEmpty()) {
+        return;
+    }
+
+    // Search from the next platform in the rotation.
+    for (int checked = 0; checked < platforms.size(); checked++) {
+
+        int index = (nextPlatformIndex + checked)
+                % platforms.size();
+
+        Platform platform = platforms.get(index);
+
+        if (platform.getCurrentPassengers() > 0) {
+
+            nextPlatformIndex = (index + 1) % platforms.size();
+
+            int departed = simulateDeparture(
+                stationIds.get(index),
+                platform.getPlatformId(),
+                10
+            );
+
+            if (departed > 0) {
+                System.out.println(
+                    "Automatic train departed from station "
+                    + stationIds.get(index)
+                    + ", platform " + platform.getPlatformId()
+                    + ", carrying " + departed + " passengers."
+                );
+            }
+
+            return;
+        }
+    }
+
+    System.out.println(
+        "No passengers available for automatic departure."
+    );
+}
 
 
 }
