@@ -5,6 +5,8 @@ import java.util.ArrayList;
 //import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,6 +15,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 public class StationPlatformService {
 
     private final Map<String, StationPlatformManager> stationManagers;
+    private final Set<String> departedPassengerIds =
+        ConcurrentHashMap.newKeySet();
     private int nextPlatformIndex = 0;
 
     public StationPlatformService() {
@@ -97,6 +101,17 @@ public class StationPlatformService {
             }
         }
 
+        if (departedPassengerIds.contains(passengerId)) {
+    return new PassengerStatus(
+            passengerId,
+            "DEPARTED",
+            null,
+            0,
+            0,
+            "Your train has departed. You have left the platform."
+    );
+}
+
         return new PassengerStatus(
             passengerId,
             "NOT_FOUND",
@@ -107,14 +122,34 @@ public class StationPlatformService {
         );
     }
 
-    public int simulateDeparture(String platformId, int trainCapacity) {
+    
+public int simulateDeparture(String platformId, int trainCapacity) {
     for (StationPlatformManager manager : stationManagers.values()) {
-        int result = manager.departTrainFromPlatform(
-            platformId, trainCapacity
-        );
+        for (Platform platform : manager.getPlatforms()) {
 
-        if (result >= 0) {
-            return result;
+            if (!platform.getPlatformId().equals(platformId)) {
+                continue;
+            }
+
+            // Remember who was on the platform before departure.
+            List<Passenger> beforeDeparture =
+                    new ArrayList<>(platform.getPassengers());
+
+            int departed = manager.departTrainFromPlatform(
+                    platformId, trainCapacity);
+
+            // Identify passengers removed by the departing train.
+            if (departed > 0) {
+                for (Passenger passenger : beforeDeparture) {
+                    if (!platform.hasPassenger(
+                            passenger.getPassengerId())) {
+                        departedPassengerIds.add(
+                                passenger.getPassengerId());
+                    }
+                }
+            }
+
+            return departed;
         }
     }
 
@@ -122,12 +157,13 @@ public class StationPlatformService {
 }
 
 
+
     
     
     @Scheduled(
-        initialDelay = 30000,
-        fixedRate = 30000
-    )
+    initialDelay = 60000,
+    fixedRate = 45000
+)
     public void simulateAutomaticDepartures() {
 
         // Collect platforms in a consistent order.

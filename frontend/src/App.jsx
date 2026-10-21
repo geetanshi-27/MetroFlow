@@ -9,6 +9,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fareQuote, setFareQuote] = useState(null);
+  const [fareLoading, setFareLoading] = useState(false);
+  const [fareError, setFareError] = useState("");
   const [passengerId, setPassengerId] = useState("");
   const [sessionError, setSessionError] = useState("");
   const [platforms, setPlatforms] = useState([]);
@@ -38,6 +41,9 @@ export default function App() {
     setLoading(true);
     setError("");
     setRoute(null);
+    setFareQuote(null);
+    setFareError("");
+    setFareLoading(true);
 
     try {
       const response = await fetch("http://localhost:8080/api/routes", {
@@ -58,10 +64,33 @@ export default function App() {
 
       const data = await response.json();
       setRoute(data);
+
+      // Fetch the fare quote for the same journey.
+      const fareResponse = await fetch(
+        "http://localhost:8080/api/fares",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sourceId: source,
+            destinationId: destination,
+            strategy: strategy,
+          }),
+        }
+      );
+
+      if (!fareResponse.ok) {
+setFareError("Route found, but fare calculation failed.");      }
+
+      const fareData = await fareResponse.json();
+      setFareQuote(fareData);
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+      setFareLoading(false);
     }
   }
 
@@ -374,6 +403,49 @@ export default function App() {
                     );
                   })}
                 </ol>
+
+
+                {fareLoading && (
+                  <p className="mt-5 text-sm text-slate-400">
+                    Calculating ticket fares...
+                  </p>
+                )}
+
+                {fareError && (
+                  <p className="mt-5 text-sm text-rose-400">
+                    {fareError}
+                  </p>
+                )}
+
+                {fareQuote && (
+                  <div className="mt-6 border-t border-slate-800 pt-5">
+                    <h4 className="text-lg font-semibold text-teal-300">
+                      Ticket fares
+                    </h4>
+
+                    <p className="mt-1 text-sm text-slate-400">
+                      {fareQuote.numberOfStops} connections · Base fare ₹{fareQuote.baseFare}
+                    </p>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl bg-slate-900 p-4">
+                        <p className="text-sm text-slate-400">Adult</p>
+                        <p className="mt-2 text-2xl font-bold">₹{fareQuote.adultFare}</p>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-900 p-4">
+                        <p className="text-sm text-slate-400">Child</p>
+                        <p className="mt-2 text-2xl font-bold">₹{fareQuote.childFare}</p>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-900 p-4">
+                        <p className="text-sm text-slate-400">Senior</p>
+                        <p className="mt-2 text-2xl font-bold">₹{fareQuote.seniorFare}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               </div>
             )}
 

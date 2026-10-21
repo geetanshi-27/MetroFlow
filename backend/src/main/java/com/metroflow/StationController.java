@@ -18,6 +18,12 @@ import java.util.LinkedHashMap;
 @CrossOrigin(origins = "http://localhost:5173")
 public class StationController {
 
+    private final FareService fareService;
+
+public StationController(FareService fareService) {
+    this.fareService = fareService;
+}
+
     
 @GetMapping("/api/stations")
 public List<Map<String, Object>> getStations() {
@@ -95,5 +101,50 @@ public List<Map<String, Object>> getStations() {
 
         return ResponseEntity.ok(result);
     }
+
+
+    @PostMapping("/api/fares")
+    public ResponseEntity<FareQuote> calculateFare(
+            @RequestBody Map<String, String> request) {
+
+        String source = request.get("sourceId");
+        String destination = request.get("destinationId");
+        String strategyName = request.get("strategy");
+
+        if (source == null || destination == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        MetroNetwork network =
+                MetroNetworkFactory.createSampleNetwork();
+
+        RouteStrategy strategy;
+
+        if (strategyName == null
+                || strategyName.trim().isEmpty()
+                || strategyName.equalsIgnoreCase("fastest")) {
+
+            strategy = new FastestRouteStrategy();
+
+        } else if (strategyName.equalsIgnoreCase("crowd-aware")) {
+
+            strategy = new CrowdAwareRouteStrategy();
+
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+
+        RouteResult route =
+                strategy.findRoute(network, source, destination);
+
+        if (route == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        FareQuote quote = fareService.calculateFare(route);
+
+        return ResponseEntity.ok(quote);
+    }
+
 
 }
