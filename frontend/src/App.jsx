@@ -82,6 +82,7 @@ export default function App() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            stationId: source,
             passengerId,
             destinationStationId: destination,
           }),
@@ -462,48 +463,50 @@ export default function App() {
             <h4 className="mt-6 font-medium">Platform status</h4>
 
             <div className="mt-3 space-y-3">
-              {platforms.map((platform) => {
-                const occupancyPercentage = Math.round(
-                  (platform.currentPassengers / platform.maxCapacity) * 100
-                );
+              {platforms
+                .filter((platform) => platform.stationId === source)
+                .map((platform) => {
+                  const occupancyPercentage = Math.round(
+                    (platform.currentPassengers / platform.maxCapacity) * 100
+                  );
 
-                return (
-                  <div
-                    key={platform.platformId}
-                    className="rounded-xl border border-slate-800 bg-slate-950 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">
-                        Platform {platform.platformId}
-                      </span>
+                  return (
+                    <div
+                      key={platform.platformId}
+                      className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">
+                          Platform {platform.platformId}
+                        </span>
 
-                      <span className="text-xs text-slate-400">
-                        Toward {platform.directionStationId}
-                      </span>
+                        <span className="text-xs text-slate-400">
+                          Toward {platform.directionStationId}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between text-sm">
+                        <span className="text-slate-400">Occupancy</span>
+
+                        <span>
+                          {platform.currentPassengers}/{platform.maxCapacity}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-teal-400 transition-all"
+                          style={{ width: `${occupancyPercentage}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-3 flex justify-between text-sm">
+                        <span className="text-slate-400">Waiting queue</span>
+                        <span>{platform.waitingCount}</span>
+                      </div>
                     </div>
-
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <span className="text-slate-400">Occupancy</span>
-
-                      <span>
-                        {platform.currentPassengers}/{platform.maxCapacity}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
-                      <div
-                        className="h-full rounded-full bg-teal-400 transition-all"
-                        style={{ width: `${occupancyPercentage}%` }}
-                      />
-                    </div>
-
-                    <div className="mt-3 flex justify-between text-sm">
-                      <span className="text-slate-400">Waiting queue</span>
-                      <span>{platform.waitingCount}</span>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
 
               {platforms.length === 0 && (
                 <p className="text-sm text-slate-500">

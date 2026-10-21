@@ -5,6 +5,7 @@ public class AdmissionRequest {
 
     private String passengerId;
     private String destinationStationId;
+    private String stationId;
 
     public AdmissionRequest() {
     }
@@ -24,4 +25,11 @@ public class AdmissionRequest {
     public void setDestinationStationId(String destinationStationId) {
         this.destinationStationId = destinationStationId;
     }
+    public String getStationId() {
+    return stationId;
+}
+
+public void setStationId(String stationId) {
+    this.stationId = stationId;
+}
 }

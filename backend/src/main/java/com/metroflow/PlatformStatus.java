@@ -8,20 +8,23 @@ public class PlatformStatus {
     private final int maxCapacity;
     private final int currentPassengers;
     private final int waitingCount;
+    private String stationId;
 
     public PlatformStatus(
-            String platformId,
-            String directionStationId,
-            int maxCapacity,
-            int currentPassengers,
-            int waitingCount) {
+        String stationId,
+        String platformId,
+        String directionStationId,
+        int maxCapacity,
+        int currentPassengers,
+        int waitingCount) {
 
-        this.platformId = platformId;
-        this.directionStationId = directionStationId;
-        this.maxCapacity = maxCapacity;
-        this.currentPassengers = currentPassengers;
-        this.waitingCount = waitingCount;
-    }
+    this.stationId = stationId;
+    this.platformId = platformId;
+    this.directionStationId = directionStationId;
+    this.maxCapacity = maxCapacity;
+    this.currentPassengers = currentPassengers;
+    this.waitingCount = waitingCount;
+}
 
     public String getPlatformId() {
         return platformId;
@@ -42,4 +45,8 @@ public class PlatformStatus {
     public int getWaitingCount() {
         return waitingCount;
     }
+
+    public String getStationId() {
+    return stationId;
+}
 }

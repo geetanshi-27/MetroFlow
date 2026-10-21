@@ -27,40 +27,43 @@ public class PlatformController {
         return platformService.getPlatformStatuses();
     }
 
+    @PostMapping("/admission")
+    public PlatformAdmissionResult requestAdmission(
+            @RequestBody AdmissionRequest request) {
 
-@PostMapping("/admission")
-public PlatformAdmissionResult requestAdmission(
-        @RequestBody AdmissionRequest request) {
+        return platformService.requestAdmission(
+                request.getStationId(),
+                request.getPassengerId(),
+                request.getDestinationStationId());
+    }
 
-    return platformService.requestAdmission(
-            request.getPassengerId(),
-            request.getDestinationStationId()
-    );
-}
+    @GetMapping("/status/{passengerId}")
+    public PassengerStatus getPassengerStatus(
+            @PathVariable String passengerId) {
+        return platformService.getPassengerStatus(passengerId);
+    }
 
-
-@GetMapping("/status/{passengerId}")
-public PassengerStatus getPassengerStatus(
-        @PathVariable String passengerId) {
-    return platformService.getPassengerStatus(passengerId);
-}
-
-
+    
 @PostMapping("/{platformId}/departure")
 public String simulateDeparture(
         @PathVariable String platformId) {
 
-    boolean released = platformService.simulateDeparture(platformId);
+    int departed = platformService.simulateDeparture(platformId, 10);
 
-    if (released) {
+    if (departed > 0) {
         return "Departure simulated for Platform " + platformId
-            + ". The next queued passenger, if any, has been admitted.";
+            + ". Passengers departed: " + departed
+            + ". Any waiting passengers have been admitted if space is available.";
     }
 
-    return "No passenger could be released from Platform " + platformId
-        + ". Check the platform ID and current occupancy.";
-}
+    if (departed == 0) {
+        return "No passengers were available to depart from Platform "
+            + platformId + ".";
+    }
 
+    return "Platform " + platformId
+        + " was not found. Please check the platform ID.";
+}
 
 
 }

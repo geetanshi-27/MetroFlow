@@ -114,14 +114,19 @@ public PlatformAdmissionResult requestAdmission(
     );
 }
 
-public boolean releasePassengerFromPlatform(String platformId) {
+
+public int departTrainFromPlatform(
+        String platformId,
+        int trainCapacity) {
+
     for (Platform platform : platforms) {
         if (platform.getPlatformId().equals(platformId)) {
-            return platform.releasePassenger();
+            return platform.departTrain(trainCapacity);
         }
     }
 
-    return false;
+    return -1;
 }
+
 
 }

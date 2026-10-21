@@ -88,6 +88,32 @@ public class Platform {
         return true;
     }
 
+
+public int departTrain(int trainCapacity) {
+    if (trainCapacity <= 0) {
+        throw new IllegalArgumentException(
+                "Train capacity must be positive.");
+    }
+
+    int passengersLeaving = Math.min(
+            trainCapacity, passengers.size());
+
+    for (int i = 0; i < passengersLeaving; i++) {
+        passengers.remove(0);
+    }
+
+    currentPassengers -= passengersLeaving;
+
+    while (hasSpace() && !waitingQueue.isEmpty()) {
+        Passenger nextPassenger = waitingQueue.poll();
+        passengers.add(nextPassenger);
+        currentPassengers++;
+    }
+
+    return passengersLeaving;
+}
+
+
     public boolean addToQueue(Passenger passenger) {
         if (passenger == null || containsPassenger(passenger)) {
             return false;

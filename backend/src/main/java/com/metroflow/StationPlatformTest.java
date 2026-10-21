@@ -5,9 +5,9 @@ public class StationPlatformTest {
 
     public static void main(String[] args) {
 
-        StationPlatformManager central =
-                StationPlatformFactory.createCentralStation();
-
+StationPlatformManager central =
+        StationPlatformFactory.createAllStations().get("S01");
+        
         // Fill the Airport-bound platform (P02).
         Platform airportPlatform =
                 central.findAvailablePlatform("S05");
@@ -45,10 +45,9 @@ public class StationPlatformTest {
         // Simulate a departure from P02.
         System.out.println("\n--- Simulate Train Departure ---");
 
-        boolean released =
-                central.releasePassengerFromPlatform("P02");
-
-        System.out.println("Passenger released: " + released);
+int released =
+        central.departTrainFromPlatform("P02", 10);
+        System.out.println("Passengers departed: " + released);
         System.out.println("Passengers on P02: "
                 + airportPlatform.getCurrentPassengers());
         System.out.println("Waiting queue size: "
