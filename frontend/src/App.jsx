@@ -9,6 +9,14 @@ export default function App() {
   const [error, setError] = useState("");
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [passengerId, setPassengerId] = useState("");
+  const [sessionError, setSessionError] = useState("");
+  const [platforms, setPlatforms] = useState([]);
+  const [admission, setAdmission] = useState(null);
+  const [admissionLoading, setAdmissionLoading] = useState(false);
+  const [passengerStatus, setPassengerStatus] = useState(null);
+  const [departureLoading, setDepartureLoading] = useState(false);
+  const [departureMessage, setDepartureMessage] = useState("");
 
   useEffect(() => {
     fetch("http://localhost:8080/api/stations")
@@ -57,8 +65,155 @@ export default function App() {
     }
   }
 
+
+  async function requestAdmission() {
+    if (!passengerId || !destination) return;
+
+    setAdmissionLoading(true);
+    setAdmission(null);
+    setError("");
+
+    try {
+      const response = await fetch(
+        "http://localhost:8080/api/platforms/admission",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            passengerId,
+            destinationStationId: destination,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not request platform admission.");
+      }
+
+      const data = await response.json();
+      setAdmission(data);
+      setPassengerStatus({
+        passengerId,
+        status: data.status,
+        platformId: data.platformId,
+        queuePosition: data.queuePosition,
+        estimatedWaitingMinutes: 0,
+        message: data.message,
+      });
+    } catch (err) {
+      setError(err.message || "Platform admission failed.");
+    } finally {
+      setAdmissionLoading(false);
+    }
+  }
+
+
+  async function simulateDeparture() {
+    if (!admission?.platformId) return;
+
+    setDepartureLoading(true);
+    setDepartureMessage("");
+
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/platforms/${admission.platformId}/departure`,
+        { method: "POST" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not simulate departure.");
+      }
+
+      const message = await response.text();
+      setDepartureMessage(message);
+    } catch (err) {
+      setDepartureMessage(err.message || "Departure simulation failed.");
+    } finally {
+      setDepartureLoading(false);
+    }
+  }
+
+
+
+
+  useEffect(() => {
+    async function createPassengerSession() {
+      try {
+        const response = await fetch("http://localhost:8080/api/sessions", {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          throw new Error("Could not create passenger session.");
+        }
+
+        const data = await response.json();
+        setPassengerId(data.passengerId);
+      } catch {
+        setSessionError(
+          "Could not create your passenger ID. Check the backend connection."
+        );
+      }
+    }
+
+    createPassengerSession();
+  }, []);
+
+
+
+  useEffect(() => {
+    async function fetchPlatforms() {
+      try {
+        const response = await fetch("http://localhost:8080/api/platforms");
+
+        if (!response.ok) {
+          throw new Error("Could not load platforms.");
+        }
+
+        const data = await response.json();
+        setPlatforms(data);
+      } catch (err) {
+        console.error("Platform loading failed:", err);
+      }
+    }
+
+    async function fetchPassengerStatus() {
+      if (!passengerId || !admission) return;
+
+      try {
+        const response = await fetch(
+          `http://localhost:8080/api/platforms/status/${passengerId}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Could not load passenger status.");
+        }
+
+        const data = await response.json();
+        setPassengerStatus(data);
+      } catch (err) {
+        console.error("Passenger status loading failed:", err);
+      }
+    }
+
+    fetchPlatforms();
+    fetchPassengerStatus();
+
+    const intervalId = setInterval(() => {
+      fetchPlatforms();
+      fetchPassengerStatus();
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [passengerId, admission]);
+
+
+
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-white-950 text-slate-100">
       <header className="border-b border-slate-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>
@@ -69,9 +224,22 @@ export default function App() {
               Smarter journeys. Better connections.
             </p>
           </div>
-          <span className="rounded-full border border-teal-800 bg-teal-950 px-3 py-1 text-xs text-teal-300">
-            NETWORK DEMO
-          </span>
+          <div className="text-right">
+            <span className="rounded-full border border-teal-800 bg-teal-950 px-3 py-1 text-xs text-teal-300">
+              NETWORK DEMO
+            </span>
+
+            <p className="mt-2 text-xs text-slate-400">
+              Passenger ID:{" "}
+              <span className="font-semibold text-teal-300">
+                {passengerId || "Generating..."}
+              </span>
+            </p>
+
+            {sessionError && (
+              <p className="mt-2 text-xs text-rose-400">{sessionError}</p>
+            )}
+          </div>
         </div>
       </header>
 
@@ -208,6 +376,69 @@ export default function App() {
               </div>
             )}
 
+
+            <div className="mt-6 border-t border-slate-800 pt-6">
+              <h3 className="text-lg font-semibold">Platform access</h3>
+
+              <p className="mt-2 text-sm text-slate-400">
+                Request entry to a platform serving your selected destination.
+              </p>
+
+              <button
+                onClick={requestAdmission}
+                disabled={!passengerId || !destination || admissionLoading}
+                className="mt-4 w-full rounded-xl bg-teal-400 px-5 py-3 font-bold text-slate-950 hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {admissionLoading ? "Requesting admission..." : "Request platform admission"}
+              </button>
+
+
+              {admission && (
+                <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950 p-4">
+                  <p className="font-semibold text-teal-300">
+                    {passengerStatus?.status || admission.status}
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-300">
+                    {passengerStatus?.message || admission.message}
+                  </p>
+
+                  {(passengerStatus?.platformId || admission.platformId) && (
+                    <p className="mt-2 text-sm text-slate-400">
+                      Platform: {passengerStatus?.platformId || admission.platformId}
+                    </p>
+                  )}
+
+                  {passengerStatus?.status === "WAITING" && (
+                    <div className="mt-2 text-sm text-slate-400">
+                      <p>Queue position: {passengerStatus.queuePosition}</p>
+                      <p>
+                        Estimated wait: {passengerStatus.estimatedWaitingMinutes} minutes
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={simulateDeparture}
+                    disabled={!(passengerStatus?.platformId || admission.platformId) || departureLoading}
+                    className="mt-4 w-full rounded-xl border border-teal-700 px-4 py-3 font-semibold text-teal-300 hover:bg-teal-950 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {departureLoading
+                      ? "Simulating departure..."
+                      : "Simulate train departure"}
+                  </button>
+
+                  {departureMessage && (
+                    <p className="mt-3 text-sm text-slate-400">
+                      {departureMessage}
+                    </p>
+                  )}
+                </div>
+              )}
+
+            </div>
+
+
           </section>
 
           <aside className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -226,6 +457,61 @@ export default function App() {
                 <p className="mt-2 text-3xl font-bold">02</p>
               </div>
             </div>
+
+
+            <h4 className="mt-6 font-medium">Platform status</h4>
+
+            <div className="mt-3 space-y-3">
+              {platforms.map((platform) => {
+                const occupancyPercentage = Math.round(
+                  (platform.currentPassengers / platform.maxCapacity) * 100
+                );
+
+                return (
+                  <div
+                    key={platform.platformId}
+                    className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">
+                        Platform {platform.platformId}
+                      </span>
+
+                      <span className="text-xs text-slate-400">
+                        Toward {platform.directionStationId}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Occupancy</span>
+
+                      <span>
+                        {platform.currentPassengers}/{platform.maxCapacity}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className="h-full rounded-full bg-teal-400 transition-all"
+                        style={{ width: `${occupancyPercentage}%` }}
+                      />
+                    </div>
+
+                    <div className="mt-3 flex justify-between text-sm">
+                      <span className="text-slate-400">Waiting queue</span>
+                      <span>{platform.waitingCount}</span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {platforms.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  No platform data available.
+                </p>
+              )}
+            </div>
+
 
             <h4 className="mt-6 font-medium">Available stations</h4>
             <ul className="mt-3 space-y-2">
